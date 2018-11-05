@@ -10,4 +10,5 @@ import scala.scalajs.js.annotation.JSGlobalScope
 @JSGlobalScope
 object Globals extends js.Object {
   var endpoint: String = js.native
+  def stripText(x: String): String = js.native
 }

@@ -41,4 +41,8 @@ body {
   font-size: 0.7em;
   margin: 0.7em;
 }
+#mform textarea {
+  width: 95%;
+  height: 50vh;
+}
 /*# sourceMappingURL=home.css.map */

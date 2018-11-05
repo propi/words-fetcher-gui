@@ -28,30 +28,56 @@ object Main {
   }
 
   private def sendRequest(): Unit = {
-    loading.value = true
     val form = document.getElementById("mform").asInstanceOf[HTMLFormElement]
     val data = new FormData(form).asInstanceOf[MFormData]
-    val params = List(
-      List("patterns" -> data.get("patterns")),
-      if (typ.value == "comb") List("chars" -> data.get("chars")) else Nil,
-      if (typ.value == "varcomb") {
-        List(
-          Some("issub" -> (if (data.get("issub") == "true") "true" else "false")),
-          Some("isset" -> (if (data.get("isset") == "true") "true" else "false")),
-          if (data.get("len").isEmpty) None else Some("len" -> data.get("len"))
-        ).flatten
+    if (typ.value == "freqa") {
+      val owords = data.get("owords") == "true"
+      val wdics = data.get("wdics") == "true"
+      val txt = if (wdics) Globals.stripText(data.get("textfreq")) else data.get("textfreq")
+      val words = if (owords) {
+        txt.toLowerCase.split(' ')
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .map(_.replaceAll("[.\\\\,/#!$\"'„“%^&*;:\\[\\]@{}=\\-_`~()]", ""))
+          .filter(_.nonEmpty)
+          .groupBy(x => x)
+          .mapValues(_.length).toList
+          .sortBy(_._2)(implicitly[Ordering[Int]].reverse)
+          .map(x => js.Array(js.Dynamic.literal(word = x._1, frequency = x._2).asInstanceOf[Word]))
       } else {
-        Nil
-      },
-      if (data.get("topk").isEmpty) Nil else List("topk" -> data.get("topk")),
-      if (data.get("intopk").isEmpty) Nil else List("intopk" -> data.get("intopk")),
-      if (data.get("minf").isEmpty) Nil else List("minf" -> data.get("minf"))
-    ).flatten.map(x => x._1 + "=" + x._2).mkString("&")
-    val url = s"/${typ.value}?$params"
-    Endpoint.get[String](url) { response =>
+        txt.toLowerCase.replaceAll("\\s+", " ").toCharArray
+          .groupBy(x => x)
+          .mapValues(_.length)
+          .toList
+          .sortBy(_._2)(implicitly[Ordering[Int]].reverse)
+          .map(x => js.Array(js.Dynamic.literal(word = x._1.toString, frequency = x._2).asInstanceOf[Word]))
+      }
       result.value.clear()
-      result.value ++= JSON.parse(response.data).asInstanceOf[js.Array[js.Array[Word]]]
-      loading.value = false
+      result.value ++= js.Array(words: _*)
+    } else {
+      loading.value = true
+      val params = List(
+        List("patterns" -> data.get("patterns")),
+        if (typ.value == "comb") List("chars" -> data.get("chars")) else Nil,
+        if (typ.value == "varcomb") {
+          List(
+            Some("issub" -> (if (data.get("issub") == "true") "true" else "false")),
+            Some("isset" -> (if (data.get("isset") == "true") "true" else "false")),
+            if (data.get("len").isEmpty) None else Some("len" -> data.get("len"))
+          ).flatten
+        } else {
+          Nil
+        },
+        if (data.get("topk").isEmpty) Nil else List("topk" -> data.get("topk")),
+        if (data.get("intopk").isEmpty) Nil else List("intopk" -> data.get("intopk")),
+        if (data.get("minf").isEmpty) Nil else List("minf" -> data.get("minf"))
+      ).flatten.map(x => x._1 + "=" + x._2).mkString("&")
+      val url = s"/${typ.value}?$params"
+      Endpoint.get[String](url) { response =>
+        result.value.clear()
+        result.value ++= JSON.parse(response.data).asInstanceOf[js.Array[js.Array[Word]]]
+        loading.value = false
+      }
     }
   }
 
@@ -69,9 +95,17 @@ object Main {
           <option value="exact">Exact</option>
           <option value="comb">Combinations</option>
           <option value="varcomb">Various combinations</option>
+          <option value="freqa">Frequency analysis</option>
         </select>
+        <textarea name="textfreq" class={if (typ.bind == "freqa") "active" else "hidden"}></textarea>
+        <label class={if (typ.bind == "freqa") "active" else "hidden"}>Words:
+          <input type="checkbox" name="owords" value="true"></input>
+        </label>
+        <label class={if (typ.bind == "freqa") "active" else "hidden"}>Without diacritics:
+          <input type="checkbox" name="wdics" value="true"></input>
+        </label>
         <input type="text" name="chars" placeholder="Chars" class={if (typ.bind == "comb") "active" else "hidden"}></input>
-        <input type="text" name="patterns" placeholder="Patterns"></input>
+        <input type="text" name="patterns" class={if (typ.bind == "freqa") "hidden" else "active"} placeholder="Patterns"></input>
         <label class={if (typ.bind == "varcomb") "active" else "hidden"}>Is sub:
           <input type="checkbox" name="issub" value="true"></input>
         </label>
@@ -79,9 +113,9 @@ object Main {
           <input type="checkbox" name="isset" value="true"></input>
         </label>
         <input class={if (typ.bind == "varcomb") "active" else "hidden"} type="number" name="len" placeholder="Length"></input>
-        <input type="number" name="topk" placeholder="Top-k"></input>
-        <input type="number" name="intopk" placeholder="In-Top-k"></input>
-        <input type="number" name="minf" placeholder="Min freq"></input>
+        <input type="number" name="topk" class={if (typ.bind == "freqa") "hidden" else "active"} placeholder="Top-k"></input>
+        <input type="number" name="intopk" class={if (typ.bind == "freqa") "hidden" else "active"} placeholder="In-Top-k"></input>
+        <input type="number" name="minf" class={if (typ.bind == "freqa") "hidden" else "active"} placeholder="Min freq"></input>
         <button>Odeslat</button>
         <button onclick={e: Event =>
           e.preventDefault()
